@@ -171,7 +171,86 @@ for(let id of ['c522y1','c522y2','c522prey','c1082y1','c1082y2','c1082yd'])years
 for(let id of ['c522m1','c522m2','c522prem'])months(document.getElementById(id));
 function jalaliNow(){try{return new Intl.DateTimeFormat('fa-IR-u-ca-persian',{year:'numeric',month:'2-digit'}).format(new Date()).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replaceAll('/','-')}catch(e){return ''}}
 function setDefaults(){let p=jalaliNow().split('-').map(Number),y=p[0],m=p[1];if(y){for(let id of ['c522y2','c1082y2'])document.getElementById(id).value=String(y);for(let id of ['c522m2'])document.getElementById(id).value=String(m).padStart(2,'0');document.getElementById('c1082y1').value=String(Math.max(1315,y-1));document.getElementById('c522y1').value=String(Math.max(1315,y-1));}}
-setDefaults();
+
+function constrainDateSelects(){
+  try{
+    let mk=Object.keys(indices.cpi_monthly||{}).filter(k=>/^\d{4}-\d{2}$/.test(k));
+    let ak=Object.keys(indices.cpi_annual||{}).filter(k=>/^\d{4}$/.test(k));
+    if(!mk.length&&!ak.length)return;
+    let all=[...mk,...ak].sort();
+    let minMonthKey=all[0],maxMonthKey=all[all.length-1];
+    let minYear=Number(minMonthKey.slice(0,4));
+    let maxYear=Number(maxMonthKey.slice(0,4));
+    let maxMonth=4,minMonth=1;
+    if(mk.length){
+      let mmk=mk.sort()[mk.length-1];
+      maxYear=Math.max(maxYear,Number(mmk.slice(0,4)));
+      maxMonth=Number(mmk.slice(5,7));
+    }
+    let clampMsgNeeded=false;
+    function showClampToast(){
+      toast(`تاریخ به آخرین ماه دارای شاخص رسمی بانک مرکزی (${maxYear}/${String(maxMonth).padStart(2,'0')}) محدود شد.`);
+    }
+    let pairs=[['c522y1','c522m1'],['c522y2','c522m2'],['c522prey','c522prem']];
+    // prune year options
+    for(let yid of ['c522y1','c522y2','c522prey','c1082y1','c1082y2','c1082yd']){
+      let sel=document.getElementById(yid);
+      if(!sel)continue;
+      let cur=sel.value;
+      [...sel.options].forEach(o=>{
+        let v=Number(o.value);
+        if(!o.value||isNaN(v))return;
+        if(v>maxYear||v<minYear)o.remove();
+      });
+      if(cur&&!sel.querySelector('option[value="'+cur+'"]'))clampMsgNeeded=true;
+    }
+    // month option limiting per paired year
+    function applyMonths(ySel,mSel,fromUser){
+      if(!ySel||!mSel)return;
+      let y=Number(ySel.value);
+      let lims=[];
+      if(y===maxYear)lims.push({test:v=>v>maxMonth,target:maxMonth});
+      if(y===minYear)lims.push({test:v=>v<minMonth,target:minMonth});
+      let curVal=mSel.value;
+      [...mSel.options].forEach(o=>{
+        let v=Number(o.value);
+        if(isNaN(v)||!o.value)return;
+        let hide=lims.some(l=>l.test(v));
+        o.disabled=hide;
+        o.hidden=hide;
+      });
+      let limsActive=lims.length>0;
+      if(!limsActive){
+        [...mSel.options].forEach(o=>{o.disabled=false;o.hidden=false;});
+      }
+      // clamp selection
+      let curNum=Number(curVal);
+      if(curVal&&mSel.selectedOptions[0]&&mSel.selectedOptions[0].disabled){
+        let newVal=curVal;
+        if(y===maxYear&&curNum>maxMonth)newVal=String(maxMonth).padStart(2,'0');
+        else if(y===minYear&&curNum<minMonth)newVal=String(minMonth).padStart(2,'0');
+        else{
+          let firstOk=mSel.querySelector('option:not(:disabled)');
+          if(firstOk)newVal=firstOk.value;
+        }
+        mSel.value=newVal;
+        if(fromUser){showClampToast();}
+        else clampMsgNeeded=true;
+      }
+    }
+    for(let [yid,mid] of pairs){
+      let ySel=document.getElementById(yid),mSel=document.getElementById(mid);
+      if(!ySel||!mSel)continue;
+      if(!ySel.dataset.constrained){
+        ySel.addEventListener('change',()=>applyMonths(ySel,mSel,true));
+        ySel.dataset.constrained='1';
+      }
+      applyMonths(ySel,mSel,false);
+    }
+    if(clampMsgNeeded)showClampToast();
+  }catch(e){console.warn('constrainDateSelects failed',e)}
+}
+setDefaults();constrainDateSelects();
 function fmt(n){return Number(n||0).toLocaleString('en-US')}
 function words(n){n=Math.floor(Math.abs(Number(n)||0));if(n===0)return'صفر';const u=['','یک','دو','سه','چهار','پنج','شش','هفت','هشت','نه','ده','یازده','دوازده','سیزده','چهارده','پانزده','شانزده','هفده','هجده','نوزده'],t=['','','بیست','سی','چهل','پنجاه','شصت','هفتاد','هشتاد','نود'],h=['','یکصد','دویست','سیصد','چهارصد','پانصد','ششصد','هفتصد','هشتصد','نهصد'],groups=['','هزار','میلیون','میلیارد','تریلیون'];function chunk(x){let a=[];if(x>=100){a.push(h[Math.floor(x/100)]);x%=100}if(x>=20){a.push(t[Math.floor(x/10)]);x%=10}if(x)a.push(u[x]);return a.join(' و ')}let out=[],i=0;while(n&&i<groups.length){let c=n%1000;if(c){let s=chunk(c)+(groups[i]?' '+groups[i]:'');out.unshift(s)}n=Math.floor(n/1000);i++}return out.join(' و ')||'عدد بسیار بزرگ'}
 function fmtLive(el,target){let v=Number(el.value||0);document.getElementById(target).textContent=v?fmt(v)+' ریال | '+fmt(v/10)+' تومان | '+words(v)+' ریال':''}
@@ -204,7 +283,7 @@ function storeSyncMeta(){try{let localOnly=dataSource==='ورود دستی کا�
 async function doSync(reset=false,automatic=false){if(reset){indices={cpi_monthly:{},cpi_annual:{}};lastSync='';dataSource='دادهٔ تعبیه‌شده (Seed)';localStorage.removeItem(KEY);localStorage.removeItem('legalDebtLastSync');localStorage.removeItem(METAKEY);saveIndices();await saveIndexedCache();toast('کش محلی پاک شد؛ فقط دادهٔ پایهٔ خالی موجود است');return}
 let field=document.getElementById('syncUrl'),url=(field?.value||localStorage.getItem(URLKEY)||GIST_ENDPOINT).trim(),fallbackField=document.getElementById('fallbackUrls');if(field)field.value=url;let fallbacks=(fallbackField?.value||localStorage.getItem(FALLBACKKEY)||PUBLIC_FALLBACKS.join('\n')).split(/[\n,;]+/).map(v=>v.trim()).filter(Boolean);if(url) localStorage.setItem(URLKEY,url);localStorage.setItem(FALLBACKKEY,fallbacks.join('\n'));
 let before=latestPeriod(indices),sources=[{url,label:'Gist شخصی (Tier 1)'},...fallbacks.filter(v=>v!==url).map((u,i)=>({url:u,label:`آینه/API عمومی ${i+1} (Tier 2)`}))],errors=[];syncState=navigator.onLine?'online':'offline';updateStatus();
-for(let src of sources){try{let incoming=await fetchIndices(src.url),period=sourceLatest(incoming);if(before!=='بدون داده'&&period<=before){indices=normIndices(incoming,indices);syncState='synced';storeSyncMeta();await saveIndexedCache();updateStatus();if(!automatic)toast(`داده از ${src.label} دریافت شد؛ آخرین دوره ${period} (بدون تغییر). منبع رسمی را بررسی کنید.`);continue}indices=normIndices(incoming,indices);lastSync=new Date().toLocaleString('fa-IR');dataSource=src.label;syncState='synced';localStorage.setItem(KEY,JSON.stringify(indices));localStorage.setItem('legalDebtLastSync',lastSync);storeSyncMeta();await saveIndexedCache();updateStatus();if(!automatic)toast(`داده از ${src.label} دریافت شد؛ آخرین دوره ${period}. منبع رسمی را بررسی کنید.`);return}catch(e){errors.push(src.label+': '+(e.message||'خطا'))}}
+for(let src of sources){try{let incoming=await fetchIndices(src.url),period=sourceLatest(incoming);if(before!=='بدون داده'&&period<=before){indices=normIndices(incoming,indices);constrainDateSelects();syncState='synced';storeSyncMeta();await saveIndexedCache();updateStatus();if(!automatic)toast(`داده از ${src.label} دریافت شد؛ آخرین دوره ${period} (بدون تغییر). منبع رسمی را بررسی کنید.`);continue}indices=normIndices(incoming,indices);constrainDateSelects();lastSync=new Date().toLocaleString('fa-IR');dataSource=src.label;syncState='synced';localStorage.setItem(KEY,JSON.stringify(indices));localStorage.setItem('legalDebtLastSync',lastSync);storeSyncMeta();await saveIndexedCache();updateStatus();if(!automatic)toast(`داده از ${src.label} دریافت شد؛ آخرین دوره ${period}. منبع رسمی را بررسی کنید.`);return}catch(e){errors.push(src.label+': '+(e.message||'خطا'))}}
 syncState=navigator.onLine?'stale':'offline';if(before==='بدون داده')dataSource='دادهٔ تعبیه‌شده (Seed)';updateStatus();if(!automatic)toast('منابع آنلاین ناموفق/بدون دادهٔ جدید بودند؛ کش محلی حفظ شد. '+errors.join(' | ').slice(0,180));}
 function manualAdd(){try{let m=document.getElementById('manMonth').value.trim(),a=document.getElementById('manYear').value.trim();for(let [s,t] of [[m,'cpi_monthly'],[a,'cpi_annual']])if(s){let p=s.split('=');if(p.length!==2||!Number.isFinite(Number(p[1]))||Number(p[1])<=0)throw Error('قالب شاخص نامعتبر است.');let k=p[0].trim();if(!(t==='cpi_monthly'?/^\d{4}-(0[1-9]|1[0-2])$/:/^\d{4}$/).test(k))throw Error('کلید باید YYYY-MM یا YYYY باشد.');indices[t][k]=Number(p[1])}lastSync=new Date().toLocaleString('fa-IR');dataSource='ورود دستی کاربر';localStorage.setItem('legalDebtLastSync',lastSync);storeSyncMeta();saveIndices();saveIndexedCache();toast('شاخص ثبت شد. اصل سند رسمی را نگهداری کنید.')}catch(e){toast(e.message)}}
 function exportIdx(){download('legal-debt-indices.json',JSON.stringify(indices,null,2),'application/json')}
