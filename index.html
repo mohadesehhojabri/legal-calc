@@ -36,7 +36,7 @@ button.act:active{transform:scale(.97)}
 .kv b{color:var(--pri)}
 .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700}
 .b-ok{background:#d9f2ec;color:#0b6b60}.b-off{background:#fdeaea;color:#8a2830}.b-warn{background:#fdf3dc;color:#8a6d1a}
-.syncbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.78rem;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:12px}
+.syncbar{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-top:12px;font-size:.78rem;flex-wrap:nowrap;overflow-x:auto}.syncbar .badge{flex:0 0 auto;white-space:nowrap}.syncbar .syncinfo{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--mut)}.syncbar .syncbtn{flex:0 0 auto;white-space:nowrap;padding:6px 12px;font-size:.75rem;border-radius:8px;border:0;background:var(--pri);color:#fff;font:inherit;font-weight:700;cursor:pointer}.syncbar .syncbtn:active{transform:scale(.97)}@media(max-width:560px){.syncbar{flex-wrap:wrap}.syncbar .syncinfo{flex:1 1 100%;white-space:normal;overflow:visible}.syncbar .syncbtn{flex:1 1 auto;text-align:center}}
 .err{background:#fdeaea;color:#8a2830;border-radius:10px;padding:10px;font-size:.85rem;margin-top:10px;display:none}
 .hash{font-size:.68rem;direction:ltr;text-align:left;word-break:break-all;background:#f0f3f7;padding:8px;border-radius:8px;margin-top:8px}
 footer{text-align:center;font-size:.72rem;color:var(--mut);padding:18px 10px 30px}
@@ -69,9 +69,9 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 </header>
 <main>
 <div class="syncbar" id="syncBar">
- <span id="syncBadge" class="badge b-off">وضعیت شاخص‌ها: در حال بررسی…</span>
- <span id="syncInfo">—</span>
- <button class="act sec" style="flex:0;padding:6px 12px;font-size:.75rem" onclick="openSync()">تنظیمات شاخص‌ها</button><button class="act sec" style="flex:0;padding:6px 12px;font-size:.75rem" onclick="openSyncAndRun()">همگام‌سازی اکنون</button>
+ <span id="syncBadge" class="badge b-ok">وضعیت: به‌روز</span>
+ <span id="syncInfo" class="syncinfo">—</span>
+ <button class="syncbtn" onclick="openSyncAndRun()">همگام‌سازی اکنون</button><button class="syncbtn" onclick="openSync()">تنظیمات شاخص‌ها</button>
 </div>
 
 <div class="tabs">
@@ -183,7 +183,7 @@ function monthKey(y,m){return String(y)+'-'+String(m).padStart(2,'0')}
 function getIndex(type,key){let v=Number(indices[type]?.[key]);return Number.isFinite(v)&&v>0?v:null}
 function missingIndex(type,key){return `شاخص رسمی ${key} در داده‌های این دستگاه موجود نیست. تا ورود مقدار منتشرشده توسط بانک مرکزی، محاسبه انجام نمی‌شود؛ از برآورد یا درون‌یابی استفاده نکنید.`}
 function latestPeriod(obj=indices){let keys=[...Object.keys(obj.cpi_monthly||{}),...Object.keys(obj.cpi_annual||{})];return keys.sort().at(-1)||'بدون داده'}
-function updateStatus(){let m=Object.keys(indices.cpi_monthly),a=Object.keys(indices.cpi_annual),latest=latestPeriod();let badge=document.getElementById('syncBadge');if(!badge)return;let label=syncState==='synced'?'همگام‌شده':syncState==='offline'?'کش آفلاین':syncState==='stale'?'کش قدیمی؛ تلاش مجدد':'آنلاین';badge.textContent='وضعیت: '+label;badge.className='badge '+(syncState==='synced'?'b-ok':syncState==='offline'||syncState==='stale'?'b-off':'');document.getElementById('syncInfo').textContent=`منبع: ${dataSource} | آخرین دورهٔ شاخص: ${latest} | آخرین دریافت: ${lastSync||'ندارد'} | ماهانه: ${m.length}، سالانه: ${a.length}`}
+function updateStatus(){let m=Object.keys(indices.cpi_monthly),a=Object.keys(indices.cpi_annual),latest=latestPeriod();let badge=document.getElementById('syncBadge');if(!badge)return;let validData=(m.length>0||a.length>0)&&latest!=='بدون داده';let ok=validData&&syncState!=='stale-broken';let label=ok?'به‌روز':'نیاز به بروزرسانی';badge.textContent='وضعیت: '+label;badge.className='badge '+(ok?'b-ok':'b-off');if(syncState==='stale'&&!ok){} document.getElementById('syncInfo').textContent=`منبع: ${dataSource} | آخرین دورهٔ شاخص: ${latest} | آخرین دریافت: ${lastSync||'ندارد'} | ماهانه: ${m.length}، سالانه: ${a.length}`}
 updateStatus();
 async function digest(obj){let data=new TextEncoder().encode(JSON.stringify(obj));if(globalThis.crypto?.subtle){let h=await crypto.subtle.digest('SHA-256',data);return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join('')}return 'غیرقابل‌تولید در این مرورگر (نیازمند WebCrypto/HTTPS)'}
 async function makeRecord(kind,inputs,indexes,amount,result,formula){let rec={نوع:kind,ورودی‌ها:inputs,شاخص‌ها:indexes,مبلغ_اولیه_ریال:amount,نتیجه_ریال:result,فرمول:formula,زمان_محلی:new Date().toISOString(),نسخه:'1.0',داده_شاخص_تأیید_کاربر:true};rec.sha256=await digest(rec);lastResult=rec;return rec}
